@@ -6,4 +6,4 @@
 (选择freebsd是因为iptables写懵了，个人喜欢pf.conf的语法，linux也可以实现，亲测，逻辑可以一模一样)
 
 直连下 路径: lan-ikuai wan1 出去，当命中分流逻辑，ikuai判定需要代理时，路径变成lan-wan2-freebsd-lan-wan1 (bsd内部见图)(就是绕了一圈，因此ikuai流量统计下看到的总流量会轻度失真)
-![pdf.png]([https://raw.githubusercontent.com/fu1323/ikuaiSoftroutergfw/main/软路由拓补图%20-%20副本.jpg])
+![pdf.png](https://raw.githubusercontent.com/fu1323/ikuaiSoftroutergfw/main/软路由拓补图%20-%20副本.jpg)
