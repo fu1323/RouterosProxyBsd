@@ -1,9 +1,21 @@
-# ikuaiSoftroutergfw
-爱快透明代理 一个透明代理拓补图，跑在虚拟化平台，使用爱快软路由系统配合freebsd实现，借用ikuai内置多wan分流实现根据域名进行dns分流，
-使用假wan环回流量从而突破ikuai分流器只能lan-wan分流的弊端，此方案下内网设备无需任何额外配置，不干扰bt下载 p2p连接，
-缺点是必须禁用doH，必须把内网设备dns指向ikuai(如果部署了ADGuard 需将adguard上游dns只配置指向ikuai)必须手动维护域名列表（可以直接配置一级域名，常用大约300个），
-对于需要ip直连的软件需要通过静态路由手动把地址段指向wan2(如Telegram)
-(选择freebsd是因为iptables写懵了，个人喜欢pf.conf的语法，linux也可以实现，亲测，逻辑可以一模一样)
+拓补如图，Routeros路由器，Lan1连接公网出口，Lan2连接freebsd，lan负责局域网。 ros和bsd可以使用ESxi
+虚拟化放在一个机器，使用虚拟交换机连接。freebsd连接两个网线，一个连接Ros wan2，一个连接到Ros lan侧（是bsd的默认路由）
 
-直连下 路径: lan-ikuai wan1 出去，当命中分流逻辑，ikuai判定需要代理时，路径变成lan-wan2-freebsd-lan-wan1 (bsd内部见图)(就是绕了一圈，因此ikuai流量统计下看到的总流量会轻度失真)
-![pdf.png](https://raw.githubusercontent.com/fu1323/ikuaiSoftroutergfw/main/软路由拓补图%20-%20副本.jpg)
+BSD部分： 使用Tun2socks创建Tun接口，开启Fib路由表，Fib1路由表设置默认路由指向Tun接口,tun接口和Lan2口都需要手动配置静态Ipv4 ipv6地址pf防火墙配置规则，lan2进来的流量走fib1路由表。流量封装完成，会通过lan再次来到ros，从Wan1出去。
+xray客户端连接美国vps，并把socks映射成tunO接口，pf配置规则
+pass in quick on Sext _if from any to any rtableSfibid keep state
+表里默认路由走tunO。
+pf还要阻止icmp进入tun0,否则会影响邻居发现，造成ros wan2 找不到bsd的mac地址
+（到vps的请求走lan1，因为会走默认的fibO的默认路由），（以上配置启动脚本，开机按顺序启动，托管给rc）
+
+ROS代理部分：
+正常上网拨号，配置内网Ip，配置Dhcp地址池，Nat配置Masauerade规则。
+ip dns static 配置外网域名（收集了两千多个，只需要配置一级域名并勾选匹配Subdomain，能覆盖百分之九十五的访问需求这个域名清单是分流核心，需要自己维护），配置WD类型，转发到1.1.1.1，配置加入一个自己命名的addresslist，
+iPv4 ipv6分别配置防火墙Mangle规则，在自己命名的那个ADdresslist
+里的地址，打上Routingmark。Ipv4 ipv6路由表分别配置 带那个Routingmark的流量走下一跳Wan2出口。然后配置静态路由，1.1.1.1要走Lan2。开启dns服务器，允许内网设备连接，上游设置成不一样的公共dns地址（如223.5.5.5 设置成一样会导致所有dns查询都走代理）。dhcp要设置所有设备dns服务器是Routeros(这是核心Ipv6需要特殊处理，如果光猫非桥接模式，可以关闭光猫Ra,开启Dhcpv6(方便ros拿地址，根据规范，只有路由器之间才可以不经过ra直接通过dhcpv6拿地址 前缀配置Nat66，Ra通告分配Fd00地址
+
+（方法不唯一，根据拓补灵活调整，总之必须让ipv6流量出口经过ros）如果遇到微信抖音转圈问题，大概率是mtu问题，可以适当改小ipv6 mtu。Tiktok由于超时机制比较激进，跨洋往返光ns查询就要700ms，因此在不使用fakeip的方案经常超时造成无法加载，必须使用ros的dns缓存同时打开Addresslist缓存，方可解决问题。
+
+此方法没有使用fakeip，终端获取到的是真实Ip，但无法支持Doh，必须使用明文Udp53，Telegram等ip直连软件需要额外配置静态路由分流，此方案优势在于彻底透明,ipv6代理支持，弊端在于需要手动维护域名列表，复杂环境还会Nat破坏pv6 一对一特性，但是绝对稳定透明客户端零配置。若想去掉nat66，需要运营商分配大于/64的ipv6前缀，一个给wan1，一个给wan2，而且还要考虑前缀变动，或用dhcpv6拿前缀）
+直连下 路径: lan-ros wan1 出去，当命中分流逻辑，ikuai判定需要代理时，路径变成lan-wan2-freebsd-lan-wan1 (bsd内部见图)
+![pdf.png](https://raw.githubusercontent.com/fu1323/ikuaiSoftroutergfw/main/989.png)
