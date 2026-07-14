@@ -3,7 +3,7 @@
 
 BSD部分： 使用Tun2socks创建Tun接口，开启Fib路由表，Fib1路由表设置默认路由指向Tun接口,tun接口和Lan2口都需要手动配置静态Ipv4 ipv6地址pf防火墙配置规则，lan2进来的流量走fib1路由表。流量封装完成，会通过lan再次来到ros，从Wan1出去。
 xray客户端连接美国vps，并把socks映射成tunO接口，pf配置规则
-pass in quick on Sext _if from any to any rtableSfibid keep state
+pass in quick on $ext_if from any to any rtable $fibid keep state
 表里默认路由走tunO。
 pf还要阻止icmp进入tun0,否则会影响邻居发现，造成ros wan2 找不到bsd的mac地址
 （到vps的请求走lan1，因为会走默认的fibO的默认路由），（以上配置启动脚本，开机按顺序启动，托管给rc）
