@@ -1,3 +1,7 @@
+Routeros 软路由  透明代理 拓补图， ipv6原生支持  xray-core freebsd 跑在虚拟化平台，dns分流 内网设备零配置  原创by fu1323
+
+
+
 Routeros路由器，wan1连接公网出口，wan2连接freebsd，lan负责局域网。  ros和bsd可以使用esxi放在一个机器，使用虚拟交换机连接。
 Freebsd连接:两个网线，一个连接ros wan2，一个连接到ros lan侧（是bsd的默认路由）
 Freebsd配置: 开启代理软件xray-core，监听socks代理端口(可以只用v4/v6连接服务器，服务器只要支持v6，他就可以处理v6，与连接方式无关)，使用tun2socks创建tun接口，开启fib路由表，fib1路由表设置默认路由指向tun接口(tun接口和wan2口都需要手动配置静态ipv4 ipv6地址)pf防火墙配置规则，wan2进来的流量有fib1路由表。流量封装完成，会通过lan再次来到ros，从wan1出去。
