@@ -1,24 +1,16 @@
-拓补如图，Routeros路由器，Lan1连接公网出口，Lan2连接freebsd，lan负责局域网。 ros和bsd可以使用ESxi
-虚拟化放在一个机器，使用虚拟交换机连接。freebsd连接两个网线，一个连接Ros wan2，一个连接到Ros lan侧（是bsd的默认路由）
+Routeros路由器，wan1连接公网出口，wan2连接freebsd，lan负责局域网。  ros和bsd可以使用esxi放在一个机器，使用虚拟交换机连接。
+Freebsd连接:两个网线，一个连接ros wan2，一个连接到ros lan侧（是bsd的默认路由）
+Freebsd配置: 开启代理软件xray-core，监听socks代理端口(可以只用v4/v6连接服务器，服务器只要支持v6，他就可以处理v6，与连接方式无关)，使用tun2socks创建tun接口，开启fib路由表，fib1路由表设置默认路由指向tun接口(tun接口和wan2口都需要手动配置静态ipv4 ipv6地址)pf防火墙配置规则，wan2进来的流量有fib1路由表。流量封装完成，会通过lan再次来到ros，从wan1出去。
+Routeros配置:  
+正常上网:拨号，配置内网ip，配置dhcp地址池，只有wab1 nat配置masauerade规则。（wan2不动，ros做三层透明转发）
+代理部分:
+ip dns static 配置外网域名（收集了两千多个，只需要配置一级域名并勾选匹配subdomain，能覆盖百分之九十五的访问需求这个域名清单是分流核心，需要自己维护），配置FWD类型，转发到1.1.1.1，配置加入一个自己命名的addresslist，ipv4 ipv6分别配置防火墙mangle规则，在自己命名的那个addresslist里的地址，打上routingmark。ipv4 ipv6路由表分别配置  带那个routingmark的流量走下一跳wan2出口。然后配置静态路由，1.1.1.1要走wan2。开启dns服务器，允许内网设备连接，上游设置成和fwd转发不一样的公共dns地址（设置成一样会导致所有dns查询都走代理）。 dhcp要设置所有设备dns服务器是routeros(这是核心)
 
-BSD部分： 使用Tun2socks创建Tun接口，开启Fib路由表，Fib1路由表设置默认路由指向Tun接口,tun接口和Lan2口都需要手动配置静态Ipv4 ipv6地址pf防火墙配置规则，lan2进来的流量走fib1路由表。流量封装完成，会通过lan再次来到ros，从Wan1出去。
-xray客户端连接美国vps，并把socks映射成tun0接口，pf配置规则
-pass in quick on $ext_if from any to any rtable $fibid keep state
-表里默认路由走tun0。
-pf还要阻止icmp进入tun0,否则会影响邻居发现，造成ros wan2 ipv6找不到下一跳bsd的mac地址,从而wan2 ipv6瘫痪(重要!重要!重要!)
-（到vps的请求走lan1，因为会走默认的fibO的默认路由），（以上配置启动脚本，开机按顺序启动，托管给rc）
+Ipv6需要特殊处理，如果光猫非桥接模式，可以关闭光猫ra,开启dhcpv6(方便ros拿前缀，根据规范，只有路由器之间才可以不经过ra直接通过dhcp拿公网前缀) 配置pool,前缀长度64，Address下用pool的地址前缀开ra 如果遇到微信 抖音 转圈问题，大概率是mtu问题，可以适当改小ipv6 mtu。
 
-ROS代理部分：
-正常上网拨号，配置内网Ip，配置Dhcp地址池，Nat配置Masauerade规则。
-ip dns static 配置外网域名（收集了两千多个，只需要配置一级域名并勾选匹配Subdomain，能覆盖百分之九十五的访问需求这个域名清单是分流核心，需要自己维护），配置WD类型，转发到1.1.1.1，配置加入一个自己命名的addresslist，
-iPv4 ipv6分别配置防火墙Mangle规则，在自己命名的那个Addresslist
-里的地址，打上Routingmark。Ipv4 ipv6路由表分别配置 带那个Routingmark的流量走下一跳Wan2出口。然后配置静态路由，1.1.1.1要走Wan2。开启dns服务器，允许内网设备连接，上游设置成不一样的公共dns地址（如223.5.5.5 设置成一样会导致所有dns查询都走代理）。dhcp要设置所有设备dns服务器是Routeros(这是核心Ipv6需要特殊处理，如果光猫非桥接模式，可以关闭光猫Ra,开启Dhcpv6(方便ros拿地址，根据规范，只有路由器之间才可以不经过ra直接通过dhcpv6拿地址 前缀配置Nat66，Ra通告分配Fd00地址
+tiktok由于超时机制比较激进，跨洋往返光dns查询就要700ms，因此在不使用fakeip的方案经常超时造成无法加载，必须使用ros的dns缓存同时打开addresslist缓存，方可解决问题。
 
-（方法不唯一，根据拓补灵活调整，总之必须让ipv6流量出口经过ros）如果遇到微信抖音转圈问题，大概率是mtu问题，可以适当改小ipv6 mtu。Tiktok由于超时机制比较激进，跨洋往返光ns查询就要700ms，因此在不使用fakeip的方案经常超时造成无法加载，必须使用ros的dns缓存同时打开Addresslist缓存，方可解决问题。
+去程路径:终端发起请求（如google ig）->ros命中代理->交给wan2-> xray加密隧道封装->lan给ros,wan1出网
+回程:vps返回数据经过wan1 ros给bsd->bsd解封装->交给原始设备（重点 路径不对称，原始发起请求的设备ip(v4 v6)和bsd lan在同一个广播域，所以会通过lan直接返回数据，不再次经过ros，终端抓包可以抓到去程回程的mac地址不是一个设备，正常现象）
 
-此方法没有使用fakeip，将分流借助dns从应用层下放到三层策略路由,终端获取到的是真实Ip，但无法支持Doh，必须使用明文Udp53，Telegram等ip直连软件需要额外配置静态路由分流，此方案优势在于彻底透明,ipv6代理支持，弊端在于需要手动维护域名列表，复杂环境还会Nat破坏pv6 一对一特性，但是绝对稳定透明客户端零配置。若想去掉nat66，需要运营商分配大于/64的ipv6前缀，一个给wan1，一个给wan2，而且还要考虑前缀变动，或用dhcpv6拿前缀）
-直连下 路径: lan-ros wan1 出去，当命中分流逻辑，ikuai判定需要代理时，路径变成lan-wan2-freebsd-lan-wan1 (bsd内部见图)
-
-(freebsd可换成Linux,思路不变)
-原创 by fu1323
-![pdf.png](https://raw.githubusercontent.com/fu1323/ikuaiSoftroutergfw/main/989.png)
+此方法没有使用fakeip，终端获取到的是真实ip，但无法支持doh，必须使用明文udp53，telegram等ip直连软件需要额外配置静态路由分流，此方案优势在于彻底 透明，弊端在于需要手动维护域名列表，ipv6原生支持，绝对稳定 透明 客户端零配置
