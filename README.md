@@ -10,7 +10,7 @@ Routeros配置:
 代理部分:
 ip dns static 配置外网域名（收集了两千多个，只需要配置一级域名并勾选匹配subdomain，能覆盖百分之九十五的访问需求这个域名清单是分流核心，需要自己维护），配置FWD类型，转发到1.1.1.1，配置加入一个自己命名的addresslist，ipv4 ipv6分别配置防火墙mangle规则，在自己命名的那个addresslist里的地址，打上routingmark。ipv4 ipv6路由表分别配置  带那个routingmark的流量走下一跳wan2出口。然后配置静态路由，1.1.1.1要走wan2。开启dns服务器，允许内网设备连接，上游设置成和fwd转发不一样的公共dns地址（设置成一样会导致所有dns查询都走代理）。 dhcp要设置所有设备dns服务器是routeros(这是核心)
 
-Ipv6需要特殊处理，如果光猫非桥接模式，可以关闭光猫ra,开启dhcpv6(方便ros拿前缀，根据规范，只有路由器之间才可以不经过ra直接通过dhcp拿公网前缀) 配置pool,前缀长度64，Address下用pool的地址前缀开ra 如果遇到微信 抖音 转圈问题，大概率是mtu问题，可以适当改小ipv6 mtu。
+Ipv6需要特殊处理，如果光猫非桥接模式，可以关闭光猫ra,开启dhcpv6(方便ros拿前缀，根据规范，只有路由器之间才可以不经过ra直接通过dhcp拿公网前缀) 配置pool,前缀长度64，Address下用pool的地址前缀开ra 如果遇到微信 抖音 转圈问题，大概率是mtu问题，由于tun2socks工作原理是连接还原，把ip数据包还原成tcp udp，再交给socks，不支持icmp，不能原生实现pmtu发现，就是mtu过大的时候出现丢包，链路中丢包的那个路由器返回的icmp packet too big消息会丢失，导致设备不知道因为包太大被丢了，就会一直转圈，可以适当改小ipv6 mtu，或者更一劳永逸，引入mss牵制，routeros防火墙里面 在tcp握手的时候就限制包大小。（重要!)
 
 tiktok由于超时机制比较激进，跨洋往返光dns查询就要700ms，因此在不使用fakeip的方案经常超时造成无法加载，必须使用ros的dns缓存同时打开addresslist缓存，方可解决问题。
 
