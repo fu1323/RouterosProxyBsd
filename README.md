@@ -14,3 +14,4 @@ tiktok由于超时机制比较激进，跨洋往返光dns查询就要700ms，因
 回程:vps返回数据经过wan1 ros给bsd->bsd解封装->交给原始设备（重点 路径不对称，原始发起请求的设备ip(v4 v6)和bsd lan在同一个广播域，所以会通过lan直接返回数据，不再次经过ros，终端抓包可以抓到去程回程的mac地址不是一个设备，正常现象）
 
 此方法没有使用fakeip，终端获取到的是真实ip，但无法支持doh，必须使用明文udp53，telegram等ip直连软件需要额外配置静态路由分流，此方案优势在于彻底 透明，弊端在于需要手动维护域名列表，ipv6原生支持，绝对稳定 透明 客户端零配置
+![图片](https://github.com/fu1323/ikuaiSoftroutergfw/blob/main/989.png?raw=true)
