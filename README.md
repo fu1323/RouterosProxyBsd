@@ -19,6 +19,11 @@
 - ✅ 支持虚拟化部署（ESXi、Proxmox、Hyper-V 等）
 
 ---
+# 拓补图
+
+![拓扑图](https://github.com/fu1323/ikuaiSoftroutergfw/blob/main/989.png?raw=true)
+
+---
 
 # 网络拓扑
 
@@ -698,11 +703,7 @@ FreeBSD：
 
 ---
 
-# 截图
 
-![拓扑图](https://github.com/fu1323/ikuaiSoftroutergfw/blob/main/989.png?raw=true)
-
----
 
 # License
 
