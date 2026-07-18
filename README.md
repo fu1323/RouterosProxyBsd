@@ -1,21 +1,711 @@
-Routeros 软路由  透明代理 拓补图， ipv6原生支持  xray-core freebsd 跑在虚拟化平台，dns分流 内网设备零配置  原创by fu1323
+# RouterOS + FreeBSD 全透明代理方案
 
+> 基于 **RouterOS + FreeBSD + Xray-core + tun2socks** 的家庭网络透明代理方案，支持 **IPv4 / IPv6 原生双栈**，客户端零配置，不使用 FakeIP。
 
+**作者：fu1323**
 
-Routeros路由器，wan1连接公网出口，wan2连接freebsd，lan负责局域网。  ros和bsd可以使用esxi放在一个机器，使用虚拟交换机连接。
-Freebsd连接:两个网线，一个连接ros wan2，一个连接到ros lan侧（是bsd的默认路由）
-Freebsd配置: 开启代理软件xray-core，监听socks代理端口(可以只用v4/v6连接服务器，服务器只要支持v6，他就可以处理v6，与连接方式无关)，使用tun2socks创建tun接口，开启fib路由表，fib1路由表设置默认路由指向tun接口(tun接口和wan2口都需要手动配置静态ipv4 ipv6地址)pf防火墙配置规则，wan2进来的流量有fib1路由表。流量封装完成，会通过lan再次来到ros，从wan1出去。
-Routeros配置:  
-正常上网:拨号，配置内网ip，配置dhcp地址池，只有wab1 nat配置masauerade规则。（wan2不动，ros做三层透明转发）
-代理部分:
-ip dns static 配置外网域名（收集了两千多个，只需要配置一级域名并勾选匹配subdomain，能覆盖百分之九十五的访问需求这个域名清单是分流核心，需要自己维护），配置FWD类型，转发到1.1.1.1，配置加入一个自己命名的addresslist，ipv4 ipv6分别配置防火墙mangle规则，在自己命名的那个addresslist里的地址，打上routingmark。ipv4 ipv6路由表分别配置  带那个routingmark的流量走下一跳wan2出口。然后配置静态路由，1.1.1.1要走wan2。开启dns服务器，允许内网设备连接，上游设置成和fwd转发不一样的公共dns地址（设置成一样会导致所有dns查询都走代理）。 dhcp要设置所有设备dns服务器是routeros(这是核心)
+---
 
-Ipv6需要特殊处理，如果光猫非桥接模式，可以关闭光猫ra,开启dhcpv6(方便ros拿前缀，根据规范，只有路由器之间才可以不经过ra直接通过dhcp拿公网前缀) 配置pool,前缀长度64，Address下用pool的地址前缀开ra 如果遇到微信 抖音 转圈问题，大概率是mtu问题，由于tun2socks工作原理是连接还原，把ip数据包还原成tcp udp，再交给socks，不支持icmp，不能原生实现pmtu发现，就是mtu过大的时候出现丢包，链路中丢包的那个路由器返回的icmp packet too big消息会丢失，导致设备不知道因为包太大被丢了，就会一直转圈，可以适当改小ipv6 mtu，或者更一劳永逸，引入mss牵制，routeros防火墙里面 在tcp握手的时候就限制包大小。（重要!)
+## ✨ 特点
 
-tiktok由于超时机制比较激进，跨洋往返光dns查询就要700ms，因此在不使用fakeip的方案经常超时造成无法加载，必须使用ros的dns缓存同时打开addresslist缓存，方可解决问题。
+- ✅ 内网设备零配置
+- ✅ IPv4 / IPv6 原生支持
+- ✅ RouterOS DNS 分流
+- ✅ FreeBSD 独立代理节点
+- ✅ Xray-core + tun2socks
+- ✅ Reality / VLESS 等协议
+- ✅ 不使用 FakeIP
+- ✅ 路由与代理解耦
+- ✅ 支持虚拟化部署（ESXi、Proxmox、Hyper-V 等）
 
-去程路径:终端发起请求（如google ig）->ros命中代理->交给wan2-> xray加密隧道封装->lan给ros,wan1出网
-回程:vps返回数据经过wan1 ros给bsd->bsd解封装->交给原始设备（重点 路径不对称，原始发起请求的设备ip(v4 v6)和bsd lan在同一个广播域，所以会通过lan直接返回数据，不再次经过ros，终端抓包可以抓到去程回程的mac地址不是一个设备，正常现象）
+---
 
-此方法没有使用fakeip，终端获取到的是真实ip，但无法支持doh，必须使用明文udp53，telegram等ip直连软件需要额外配置静态路由分流，此方案优势在于彻底 透明，弊端在于需要手动维护域名列表，ipv6原生支持，绝对稳定 透明 客户端零配置
-![图片](https://github.com/fu1323/ikuaiSoftroutergfw/blob/main/989.png?raw=true)
+# 网络拓扑
+
+```text
+                 Internet
+                     │
+                WAN1（公网）
+                     │
+              ┌────────────┐
+              │ RouterOS   │
+              │            │
+LAN──────────▶│            │
+              │            │
+              └─────┬──────┘
+                    │WAN2
+                    │
+          ┌─────────────────┐
+          │    FreeBSD       │
+          │                  │
+          │ xray-core        │
+          │ tun2socks        │
+          │ PF + FIB         │
+          └────────┬─────────┘
+                   │
+              返回 RouterOS LAN
+```
+
+RouterOS 负责：
+
+- PPPoE
+- DHCP
+- DNS
+- 域名分流
+- 策略路由
+
+FreeBSD 负责：
+
+- Xray-core
+- tun2socks
+- FIB
+- PF 防火墙
+- 数据封装与解封装
+
+两者职责分离，互不影响。
+
+---
+
+# 工作原理
+
+客户端访问 Google 为例：
+
+```
+终端
+↓
+
+RouterOS
+
+↓
+
+DNS 查询
+
+↓
+
+命中代理域名
+
+↓
+
+Address List
+
+↓
+
+Mangle 打 Routing Mark
+
+↓
+
+WAN2
+
+↓
+
+FreeBSD
+
+↓
+
+tun2socks
+
+↓
+
+Xray-core
+
+↓
+
+VPS
+
+↓
+
+Internet
+```
+
+整个过程中：
+
+- RouterOS 不负责代理
+- FreeBSD 不负责 DNS
+- 各司其职
+
+---
+
+# 部署环境
+
+推荐部署：
+
+```
+ESXi
+
+├── RouterOS VM
+└── FreeBSD VM
+```
+
+二者通过虚拟交换机连接即可。
+
+当然也可以：
+
+- RouterOS 物理机
+- FreeBSD 物理机
+
+原理一致。
+
+---
+
+# RouterOS 配置
+
+## 1. 基础网络
+
+正常配置：
+
+- PPPoE 拨号
+- LAN
+- DHCP
+- NAT
+
+**注意：**
+
+只有 WAN1 做 Masquerade。
+
+WAN2 不做 NAT，仅作为透明转发出口。
+
+---
+
+## 2. DNS
+
+开启 RouterOS DNS Server。
+
+DHCP 下发：
+
+```
+DNS = RouterOS
+```
+
+这是整个方案最核心的一步。
+
+所有终端 DNS 必须交给 RouterOS。
+
+---
+
+## 3. Static DNS
+
+对于需要代理的域名：
+
+```
+Type：FWD
+```
+
+转发：
+
+```
+1.1.1.1
+```
+
+同时：
+
+加入自定义 Address List。
+
+建议：
+
+仅维护一级域名，并勾选：
+
+```
+Match Subdomain
+```
+
+目前约两千多个域名即可覆盖绝大部分访问需求。
+
+域名列表就是整个方案的核心。
+
+---
+
+## 4. Mangle
+
+IPv4
+
+```
+Address List
+↓
+
+Routing Mark
+```
+
+IPv6
+
+同样配置。
+
+---
+
+## 5. Route
+
+建立新的 Routing Table：
+
+IPv4：
+
+```
+Routing Mark
+
+↓
+
+Next Hop
+
+↓
+
+WAN2
+```
+
+IPv6 同理。
+
+---
+
+## 6. 静态路由
+
+需要保证：
+
+```
+1.1.1.1
+
+↓
+
+WAN2
+```
+
+否则 DNS Forward 将无法工作。
+
+另外：
+
+RouterOS 自己的上游 DNS 不建议与 FWD 使用同一个服务器。
+
+否则：
+
+所有 DNS 查询都会走代理。
+
+---
+
+# FreeBSD 配置
+
+建议两块网卡：
+
+```
+NIC1
+
+↓
+
+连接 RouterOS WAN2
+
+NIC2
+
+↓
+
+连接 RouterOS LAN
+```
+
+其中：
+
+LAN 网卡作为默认路由。
+
+---
+
+## 安装
+
+需要：
+
+- xray-core
+- tun2socks
+
+---
+
+## 网络
+
+tun 接口与 WAN2：
+
+均建议配置：
+
+- IPv4
+- IPv6
+
+静态地址。
+
+---
+
+## FIB
+
+开启多个 FIB。
+
+例如：
+
+```
+fib1
+```
+
+默认路由：
+
+```
+fib1
+
+↓
+
+tun0
+```
+
+---
+
+## PF
+
+PF 负责：
+
+来自 WAN2 的流量：
+
+```
+↓
+
+setfib 1
+
+↓
+
+进入 tun
+```
+
+随后：
+
+tun2socks
+
+↓
+
+Xray
+
+↓
+
+VPS
+
+完成封装。
+
+---
+
+# IPv6 配置
+
+本方案支持 IPv6 原生代理。
+
+## 光猫
+
+推荐：
+
+关闭 RA
+
+开启 DHCPv6。
+
+这样 RouterOS 可以直接获取公网前缀。
+
+---
+
+## Prefix
+
+配置：
+
+```
+Pool
+
+Prefix Length = 64
+```
+
+随后：
+
+Address
+
+使用 Pool。
+
+开启：
+
+RA。
+
+---
+
+## MTU
+
+这是 IPv6 最容易踩坑的地方。
+
+由于：
+
+tun2socks
+
+本质上：
+
+```
+IP
+
+↓
+
+TCP / UDP
+
+↓
+
+SOCKS
+```
+
+不会转发 ICMP Packet Too Big。
+
+因此：
+
+PMTU 无法正常工作。
+
+最终表现：
+
+- 微信转圈
+- 抖音转圈
+- 部分网站打不开
+
+---
+
+## 推荐解决方案
+
+两种方式：
+
+### 方法一
+
+降低 IPv6 MTU。
+
+例如：
+
+```
+1420
+```
+
+根据实际链路调整。
+
+---
+
+### 方法二（推荐）
+
+RouterOS：
+
+Firewall
+
+↓
+
+Mangle
+
+↓
+
+TCP SYN
+
+↓
+
+Change MSS
+
+限制 MSS。
+
+这样可以彻底避免 PMTU 黑洞。
+
+---
+
+# TikTok 无法加载
+
+TikTok 超时机制较激进。
+
+跨洋访问：
+
+DNS 查询往返时间可能达到：
+
+700ms 左右。
+
+如果不使用 FakeIP：
+
+容易因为 DNS 超时导致：
+
+无法加载。
+
+解决方案：
+
+- 开启 RouterOS DNS Cache
+- 开启 Address List Cache
+
+即可恢复正常。
+
+---
+
+# 数据流向
+
+## 去程
+
+```
+客户端
+
+↓
+
+RouterOS
+
+↓
+
+命中代理
+
+↓
+
+WAN2
+
+↓
+
+FreeBSD
+
+↓
+
+tun2socks
+
+↓
+
+Xray
+
+↓
+
+VPS
+
+↓
+
+Internet
+```
+
+---
+
+## 回程
+
+```
+Internet
+
+↓
+
+VPS
+
+↓
+
+WAN1
+
+↓
+
+RouterOS
+
+↓
+
+FreeBSD
+
+↓
+
+解封装
+
+↓
+
+客户端
+```
+
+注意：
+
+这是**非对称路由**。
+
+客户端抓包时：
+
+去程和回程：
+
+MAC 地址不同属于正常现象。
+
+因为：
+
+客户端与 FreeBSD LAN 处于同一广播域。
+
+回程不会再次经过 RouterOS 转发。
+
+---
+
+# 为什么不用 FakeIP？
+
+本方案完全不使用 FakeIP。
+
+优点：
+
+- 终端获得真实 IP
+- 排查网络问题简单
+- DNS 行为更符合真实网络
+- IPv6 支持更自然
+
+缺点：
+
+- 不支持 DoH 分流
+- 必须使用 UDP 53
+- Telegram 等 IP 直连软件需要额外配置静态路由
+- 需要维护域名列表
+
+---
+
+# 为什么选择 RouterOS + FreeBSD？
+
+传统透明代理：
+
+```
+OpenWrt
+
+↓
+
+路由
+
+↓
+
+代理
+
+↓
+
+DNS
+```
+
+全部集中在一个系统。
+
+本方案：
+
+RouterOS：
+
+- 路由
+- DHCP
+- DNS
+- 策略路由
+
+FreeBSD：
+
+- Xray
+- tun2socks
+- PF
+- FIB
+
+系统职责分离。
+
+优点：
+
+- 更稳定
+- 更容易维护
+- 更容易排查故障
+- 升级互不影响
+
+---
+
+# 优缺点
+
+## 优点
+
+- 客户端零配置
+- IPv4 / IPv6 原生支持
+- RouterOS 性能优秀
+- FreeBSD 稳定
+- 不依赖 FakeIP
+- 网络结构清晰
+- 完全透明
+
+## 缺点
+
+- 需要维护域名列表
+- 不支持 DoH 分流
+- Telegram 等 IP 直连软件需额外处理
+- 首次部署配置较复杂
+
+---
+
+# 截图
+
+![拓扑图](https://github.com/fu1323/ikuaiSoftroutergfw/blob/main/989.png?raw=true)
+
+---
+
+# License
+
+MIT License
+
+欢迎交流与改进。
