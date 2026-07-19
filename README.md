@@ -703,7 +703,15 @@ FreeBSD：
 
 ---
 
+#测试
+- 域名清单添加了test-ipv6.com,配置成功之后内网设备用浏览器打开test-ipv6.com
 
+观察到返回的ipv6 ipv4地址均为vps的，非本机地址，即配置成功
+
+---
+此方案要求vps需要具备ipv6访问能力，若服务端只有ipv4，可用tunnelbroke配置6in4（免费）来实现
+
+提示: tunnelbroke注册比较麻烦，常用邮箱会被拒绝，推荐自己域名邮箱（嫌麻烦就注册域名之后托管给腾讯企业邮）
 
 # License
 
