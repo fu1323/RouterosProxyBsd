@@ -21,7 +21,7 @@
 ---
 # 拓补图
 
-![拓扑图](https://github.com/fu1323/ikuaiSoftroutergfw/blob/main/989.png?raw=true)
+![拓扑图](https://github.com/fu1323/ikuaiSoftroutergfw/blob/main/拓补图.png?raw=true)
 
 ---
 
