@@ -165,7 +165,7 @@ ESXi
 
 **注意：**
 
-只有 WAN1 做 Masquerade。
+只有 WAN1 做 ipv4 Masquerade。
 
 WAN2 不做 NAT，仅作为透明转发出口。
 
