@@ -1,0 +1,33 @@
+#!/bin/sh
+# PROVIDE: setfib_tun
+# REQUIRE: LOGIN pf tun2socks
+# KEYWORD: nojail
+
+. /etc/rc.subr
+
+name="setfib_tun"
+start_cmd="${name}_start"
+stop_cmd=":"
+
+setfib_tun_start()
+{
+    # 等待 tun0 出现，最多等5秒
+    local i=0
+    while [ $i -lt 50 ] && ! ifconfig tun0 > /dev/null 2>&1; do
+        sleep 1
+        i=$((i + 1))
+    done
+
+    if ifconfig tun0 > /dev/null 2>&1; then
+        echo "Configuring FIB 1 routes for tun0..."
+	sysctl net.fibs=2
+	sleep 5
+        setfib 1 route add -inet6 default -interface tun0 
+        setfib 1 route add default -interface tun0 
+    else
+        echo "tun0 not found, skipping FIB routes."
+    fi
+}
+
+load_rc_config $name
+run_rc_command "$1"
