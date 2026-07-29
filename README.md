@@ -5,7 +5,18 @@
 **作者：fu1323**
 
 ---
-
+## 分流域名列表(rsc脚本) 持续维护中(参考了社区公开gfw屏蔽列表并完善)
+已完整支持:
+google全家桶 github openai claude Meta全家桶(threads fb ig等)
+      X(推，grok) 维基百科 Tiktok(针对美区) reddit discord twitch
+      Pinterest Quora telegram(需用静态ip进行分流)
+-邮箱服务
+GMX protonmail naver aol yahoo 等等
+-网盘服务
+mega.nz  terabox pikpak dropbox 等等
+-主流媒体
+彭博社 路透社 法新社 cna voa bbc 和台湾媒体 电视台 等等
+-(针对外服游戏平台欠缺优化，因本人不玩游戏 欢迎补充)
 ## ✨ 特点
 
 - ✅ 内网设备零配置
