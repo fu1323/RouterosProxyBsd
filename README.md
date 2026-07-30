@@ -140,6 +140,44 @@ Internet
 - 各司其职
 
 ---
+# 补充一下底层原理
+```
+Google TCP4️⃣
+
+↓
+
+Xray Server
+
+↓
+
+VLESS 3️⃣
+
+↓
+
+Xray Client
+
+↓
+
+SOCKS2️⃣(CONNECT Google的真实ip:443)
+
+↓
+
+tun2socks
+
+↓
+
+重新生成
+
+↓
+
+TCP1️⃣
+
+↓
+
+客户端
+```
+可见 其实一共有四个独立的tcp连接，所以客户端认为自己在和google握手，其实这个tcp连接在tun2socks就已经终止了(tun2socks内部自己维护了独立于操作系统的tcp状态机)
+ 这也是路径不对称  ,连接跟踪 都不会乱套的根本原因 
 
 # 部署环境
 
