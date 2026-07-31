@@ -4770,3 +4770,5 @@ add address-list=proxy-ips forward-to=1.1.1.1 match-subdomain=yes name=gmx.com t
 add address-list=proxy-ips forward-to=1.1.1.1 match-subdomain=yes name=gmx.at type=FWD
 add address-list=proxy-ips forward-to=1.1.1.1 match-subdomain=yes name=gmx.ch type=FWD
 add address-list=proxy-ips forward-to=1.1.1.1 match-subdomain=yes name=gmx.de type=FWD
+add address-list=proxy-ips forward-to=1.1.1.1 match-subdomain=yes name=lihkg.com type=FWD
+
